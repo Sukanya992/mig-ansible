@@ -4,13 +4,8 @@ provider "google" {
   zone    = "us-west1-a"
 }
 
-resource "tls_private_key" "my_ssh_key" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
-
-resource "google_compute_instance_template" "app_template" {
-  name         = "app-instance-template"
+resource "google_compute_instance_template" "default" {
+  name_prefix = "mig-template-"
   machine_type = "e2-standard-2"
 
   disk {
@@ -29,25 +24,42 @@ resource "google_compute_instance_template" "app_template" {
   }
 }
 
-resource "google_compute_region_instance_group_manager" "app_mig" {
-  name               = "app-mig"
-  base_instance_name = "app-instance"
-  region             = "us-west1"
+resource "tls_private_key" "my_ssh_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "google_compute_region_instance_group_manager" "mig" {
+  name               = "my-mig"
+  region             = var.region
+  base_instance_name = "ansible-instance"
   version {
-    instance_template = google_compute_instance_template.app_template.self_link
+    instance_template = google_compute_instance_template.default.self_link
   }
   target_size = 2
 }
 
-output "private_key" {
-  value     = tls_private_key.my_ssh_key.private_key_pem
-  sensitive = true
+data "google_compute_instance_group" "mig_group" {
+  name   = google_compute_region_instance_group_manager.mig.instance_group
+  region = var.region
 }
 
-output "mig_name" {
-  value = google_compute_region_instance_group_manager.app_mig.name
+data "google_compute_instance" "instances" {
+  count = length(data.google_compute_instance_group.mig_group.instances)
+  name  = element(data.google_compute_instance_group.mig_group.instances, count.index)
+  zone  = var.zone
 }
 
-output "mig_region" {
-  value = google_compute_region_instance_group_manager.app_mig.region
+output "instance_ips" {
+  value = [for inst in data.google_compute_instance.instances : inst.network_interface[0].access_config[0].nat_ip]
+  description = "Public IPs of MIG instances"
+  sensitive = false
+}
+
+variable "region" {
+  default = "us-west1"
+}
+
+variable "zone" {
+  default = "us-west1-a"
 }
