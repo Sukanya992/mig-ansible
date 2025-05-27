@@ -10,6 +10,10 @@ locals {
 resource "google_compute_instance_template" "temp1" {
   name         = "template1"
   machine_type = "e2-standard-2"
+  
+  lifecycle {
+    create_before_destroy = true
+  }
 
   disk {
     auto_delete  = true
