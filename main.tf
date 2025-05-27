@@ -10,11 +10,9 @@ resource "tls_private_key" "my_ssh_key" {
 }
 
 resource "google_compute_instance_template" "template" {
-  name_prefix = "mig-template"
-
-  machine_type = "e2-standard-2"
-
-  tags = ["web"]
+  name_prefix   = "mig-template"
+  machine_type  = "e2-standard-2"
+  tags          = ["web"]
 
   disk {
     auto_delete  = true
@@ -23,7 +21,7 @@ resource "google_compute_instance_template" "template" {
   }
 
   network_interface {
-    network = "default"
+    network       = "default"
     access_config {}
   }
 
@@ -37,27 +35,18 @@ resource "google_compute_instance_template" "template" {
 }
 
 resource "google_compute_instance_group_manager" "mig" {
-  name               = "harness-mig"
-  base_instance_name = "mig-instance"
+  name                = "harness-mig"
+  base_instance_name  = "mig-instance"
+  zone                = "us-west1-a"
+  target_size         = 1
+  wait_for_instances  = true
+
   version {
     instance_template = google_compute_instance_template.template.self_link
   }
-  zone              = "us-west1-a"
-  target_size       = 1
-  wait_for_instances = true
-}
-
-data "google_compute_instance" "mig_instance" {
-  name = google_compute_instance_group_manager.mig.instance_group
-  zone = "us-west1-a"
-  depends_on = [google_compute_instance_group_manager.mig]
 }
 
 output "private_key" {
   value     = tls_private_key.my_ssh_key.private_key_pem
   sensitive = true
-}
-
-output "vm_external_ip" {
-  value = data.google_compute_instance.mig_instance.network_interface[0].access_config[0].nat_ip
 }
