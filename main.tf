@@ -1,52 +1,63 @@
 provider "google" {
   project = "plated-epigram-452709-h6"
-  region  = "us-west1"
-  zone    = "us-west1-a"
+  zone    = "us-central1-a"
 }
 
-resource "tls_private_key" "my_ssh_key" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
+locals {
+  ssh_pub_key = file("${path.module}/id_rsa.pub")
 }
 
-resource "google_compute_instance_template" "template" {
-  name_prefix   = "mig-template"
-  machine_type  = "e2-standard-2"
-  tags          = ["web"]
+resource "google_compute_instance_template" "temp1" {
+  name         = "template1"
+  machine_type = "e2-standard-2"
 
   disk {
     auto_delete  = true
     boot         = true
-    source_image = "centos-stream-9"
+    source_image = "centos-cloud/centos-stream-9"
   }
 
   network_interface {
-    network       = "default"
+    network = "default"
+
+    # Adding access_config to assign an external IP
     access_config {}
   }
 
   metadata = {
-    ssh-keys = "ansible:${tls_private_key.my_ssh_key.public_key_openssh}"
+    ssh-keys = "ansible:${local.ssh_pub_key}"
   }
 
-  service_account {
-    scopes = ["cloud-platform"]
-  }
+  tags = ["harnessvms"]
 }
 
-resource "google_compute_instance_group_manager" "mig" {
-  name                = "harness-mig"
-  base_instance_name  = "mig-instance"
-  zone                = "us-west1-a"
-  target_size         = 1
-  wait_for_instances  = true
+resource "google_compute_health_check" "health" {
+  name = "health1"
+
+  http_health_check {
+    port         = 80
+    request_path = "/"
+  }
+
+  healthy_threshold   = 2
+  unhealthy_threshold = 2
+  timeout_sec         = 5
+  check_interval_sec  = 10
+}
+
+resource "google_compute_instance_group_manager" "manager" {
+  name               = "instance-manager-1"
+  base_instance_name = "okay"
+  zone               = "us-central1-a"
 
   version {
-    instance_template = google_compute_instance_template.template.self_link
+    instance_template = google_compute_instance_template.temp1.self_link
   }
-}
 
-output "private_key" {
-  value     = tls_private_key.my_ssh_key.private_key_pem
-  sensitive = true
+  target_size = 2
+
+  auto_healing_policies {
+    health_check      = google_compute_health_check.health.self_link
+    initial_delay_sec = 300
+  }
 }
