@@ -3,8 +3,13 @@ provider "google" {
   zone    = "us-central1-a"
 }
 
+resource "tls_private_key" "my_ssh_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
 locals {
-  ssh_pub_key = file("${path.module}/id_rsa.pub")
+  ssh_pub_key = tls_private_key.my_ssh_key.public_key_openssh
 }
 
 resource "google_compute_instance_template" "temp1" {
@@ -20,12 +25,18 @@ resource "google_compute_instance_template" "temp1" {
   network_interface {
     network = "default"
 
-    # Adding access_config to assign an external IP
     access_config {}
   }
 
   metadata = {
-    ssh-keys = "ansible:${local.ssh_pub_key}"
+    ssh-keys              = "ansible:${local.ssh_pub_key}"
+    startup-script        = <<-EOT
+      #!/bin/bash
+      sudo yum update -y
+      sudo dnf install epel-release -y
+      sudo dnf install ansible -y
+      ansible --version
+    EOT
   }
 
   tags = ["harnessvms"]
