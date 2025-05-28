@@ -13,7 +13,7 @@ locals {
 }
 
 resource "google_compute_instance_template" "temp1" {
-  name         = "template1"
+  name         = "template2"
   machine_type = "e2-standard-2"
 
   disk {
@@ -43,7 +43,7 @@ resource "google_compute_instance_template" "temp1" {
 }
 
 resource "google_compute_health_check" "health" {
-  name = "health1"
+  name = "health2"
 
   http_health_check {
     port         = 80
